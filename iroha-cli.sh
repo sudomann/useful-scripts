@@ -19,7 +19,7 @@ show_usage(){
 echo "
 iroha-cli; An production ready alternative to Hyperledger Iroha's convenient 
 roha-cli development/testing tool; This is intended for Debian-like systems,
-and relies on ssh-keygen being available in \$PATH
+and relies on ed25519-cli (from https://github.com/Warchant/ed25519-cli) being available in \$PATH
 
 
 ${cmd} [--genesis_block] --peers_address <file>
@@ -30,10 +30,10 @@ ${cmd} [--genesis_block] --peers_address <file>
 
 # Creates genesis.block file
 create_genesis_block(){
-    echo "Building genesis.block...";
+    echo "Building genesis.block..."
 }
 
-# TODO: remove redundant code calling ssh-keygen
+# TODO: remove redundant code extracting keys
 ssh_keygen_helper(){  
     echo "empty function"
 }
@@ -49,15 +49,11 @@ create_keypairs(){
         echo "--------------------------------------"
         echo "Handling "$p" as node${node_count}"
         if [[ "$p" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\:[0-9]+$ ]]; then
-            ssh_keygen_args=(-o -a 100 -t ed25519
-                -f ${peers_list_file_dir}node${node_count}
-                -C "" # No comment; TODO: extract !REQUIRED! email/name of user !gcloud! creds maybe?
-                -N "" # No password; TODO: lockdown keypairs with a password
-                )
-            # "yes" (or "no") is piped to confirm overwrite if key files already exist
-            yes | ssh-keygen "${ssh_keygen_args[@]}"
-            # Rename private key to add .priv extension
-            mv ${peers_list_file_dir}node${node_count} ${peers_list_file_dir}node${node_count}.priv
+            temp=(`ed25519-cli keygen | grep -E '[a-zA-Z0-9]{64}' -w -o`); 
+            echo "${temp[0]}%" > "${peers_list_file_dir}"/node"${node_count}".pub;
+            echo "${temp[1]}%" > "${peers_list_file_dir}"/node"${node_count}".priv; 
+            #chmod 644 node"${node_count}".pub # public key permission: 644
+            #chmod 600 node"${node_count}".priv # private key permission: 600
             ((node_count++))
         else
             halt "ERROR: "$p" failed regex validation!"
@@ -66,20 +62,14 @@ create_keypairs(){
     done < "$1"
 
     echo "Generating keypairs for admin@test and user@test..."
-    ssh_keygen_args=(-o -a 100 -t ed25519
-        -f ${peers_list_file_dir}admin@test
-        -C ""
-        -N ""
-        )
-    yes | ssh-keygen "${ssh_keygen_args[@]}"
-    ssh_keygen_args=(-o -a 100 -t ed25519
-        -f ${peers_list_file_dir}user@test
-        -C ""
-        -N ""
-        )
-    yes | ssh-keygen "${ssh_keygen_args[@]}"
-    mv ${peers_list_file_dir}admin@test ${peers_list_file_dir}admin@test.priv
-    mv ${peers_list_file_dir}user@test ${peers_list_file_dir}user@test.priv
+
+    temp=(`ed25519-cli keygen | grep -E '[a-zA-Z0-9]{64}' -w -o`); 
+    echo ""${temp[0]}"%" > "${peers_list_file_dir}"/admin@test.pub;
+    echo ""${temp[1]}"%" > "${peers_list_file_dir}"/admin@test.priv;
+
+    temp=(`ed25519-cli keygen | grep -E '[a-zA-Z0-9]{64}' -w -o`); 
+    echo ""${temp[0]}"%" > "${peers_list_file_dir}"/user@test.pub;
+    echo ""${temp[1]}"%" > "${peers_list_file_dir}"/user@test.priv;
 }
 
 # Handle positional arguments
@@ -135,9 +125,3 @@ while :; do
 
     shift
 done
-
-
-
-# Rest of the program here.
-# If there are input files (for example) that follow the options, they
-# will remain in the "$@" positional parameters.
